@@ -26,49 +26,129 @@ var sequelize = new Sequelize('mainDB', null, null, {
 });
 
 
+
+var Genre = sequelize.define('genre',
+  {
+    id: {type: Sequelize.INTEGER, primaryKey: true},
+    name: {type: Sequelize.STRING, allowNull: false}
+  },
+  {
+    timestamps: false
+  }
+)
+var Film = sequelize.define('film',
+  {
+    id: {type: Sequelize.INTEGER, primaryKey: true},
+    title: {type: Sequelize.STRING, allowNull: false},
+    release_date: {type: Sequelize.DATE, allowNull: false},
+    tagline: {type: Sequelize.STRING, allowNull: false},
+    revenue: {type: Sequelize.BIGINT, defaultValue: 0, allowNull: false},
+    budget: {type: Sequelize.BIGINT, allowNull: false},
+    runtime: {type: Sequelize.INTEGER, allowNull: false},
+    original_language: {type: Sequelize.STRING, allowNull: false},
+    status: {type: Sequelize.STRING, allowNull: false},
+    genre_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: Genre,
+        key: 'id'
+      }
+    }
+  },
+  {
+    timestamps: false
+  }
+)
+
 // ROUTE HANDLER
 function getFilmRecommendations(req, res) {
-
   //Set up response data
   var filmResponse = {
-    films: [],
     recommendations: [],
     meta: {
       limit: 10,
       offset: 0
     }
   };
-  console.log(filmResponse.films[0])
-
-  //Get the base film by the req params
-  var getFilmById = function(id){
-    console.log("in function")
-    sequelize.query(`SELECT * FROM films WHERE id = ${id}`, {type: sequelize.QueryTypes.SELECT})
-      .then(function(film){
-        if(film.length === 1){
-          filmResponse.films.push(film[0])
-          // sendResponse()
-          getSimilarFilms(film)
-        } else {
-          console.log("can't find this film")
-          res.status(404).send({message: "can't find this film"})
+  var parentData = {
+    releaseDate: [],
+    parentGenre: [],
+  }
+  Film.findById(req.params.id)
+    .then(function(film){
+      //get the film genre id and release date
+      //and put into parent data object
+      var filmObject = film.dataValues
+      // var parentReleaseDate = new Date(filmObject.release_date)
+      // console.log(parentReleaseDate)
+      // parentData.releaseDate.push(parentReleaseDate)
+      // parentData.parentGenre.push(filmObject.genre_id)
+      return filmObject
+    })
+    .then(function(filmObject){
+      //select other films in the same genre released
+      //within 15 years before and after the parent range
+      Film.belongsTo(Genre, {foreignKey: 'genre_id'})
+      console.log("in the next promise",filmObject)
+      var releaseDate = new Date(filmObject.release_date)
+      console.log(releaseDate)
+      var maxRange = `${releaseDate.getFullYear() + 15}-${releaseDate.getMonth()}-${releaseDate.getDate()}`
+      var minRange = `${releaseDate.getFullYear() - 15}-${releaseDate.getMonth()}-${releaseDate.getDate()}`
+      console.log(maxRange, minRange)
+      Film.findAll({
+        where: {
+          genre_id: filmObject.genre_id,
+          release_date: {
+            $between: [minRange, maxRange]
+          }
         }
       })
-  }
-  getFilmById(req.params.id)
+      .then(function(filteredFilms){
+        console.log("in the result call")
+        console.log(filteredFilms[0])
+
+      })
+
+
+    })
+
+    console.log(parentData)
+
+
+
+
+  //Get the base film by the req params
+  // var getFilmById = function(id){
+  //   console.log("in function")
+  //   sequelize.query(`SELECT * FROM films WHERE id = ${id}`, {type: sequelize.QueryTypes.SELECT})
+  //     .then(function(film){
+  //       if(film.length === 1){
+  //         filmResponse.films.push(film[0])
+  //
+  //         getSimilarFilms(film)
+  //       } else {
+  //         console.log("can't find this film")
+  //         res.status(404).send({message: "can't find this film"})
+  //       }
+  //     })
+  // }
+  // getFilmById(req.params.id)
 
   //get films related by genre and release date
-  var getSimilarFilms = function(film){
-    var parentReleaseDate = new Date(film[0].release_date)
-    console.log(parentReleaseDate)
-  }
+  // var getSimilarFilms = function(film){
+  //   var parentReleaseDate = new Date(film[0].release_date)
+  //   console.log(parentReleaseDate)
+  //   sendResponse()
+  // }
 
-  //send successful response
+  // send successful response
   var sendResponse = function(){res.status(200).json({
-    recommendations: filmResponse.films,
+    recommendations: filmResponse.recommendations,
     meta: filmResponse.meta
     });
   };
+
 
   console.log("film id", req.params.id)
   // sanitize req.params
