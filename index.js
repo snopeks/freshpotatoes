@@ -73,15 +73,24 @@ function getFilmRecommendations(req, res) {
     }
   };
   let matchingFilms;
+
+  // Check & set offset and limit
+  if (req.query.offset && parseInt(req.query.offset) >= 0) {
+    filmResponse.meta.offset = parseInt(req.query.offset);
+  };
+  if(req.query.limit && parseInt(req.query.limit) >= 0) {
+    filmResponse.meta.limit = parseInt(req.query.limit);
+  };
+
   Film.findById(req.params.id)
     .then((film) => {
       if(film === null){
-        res.status(422).send({message: "film doesn't exist"})
-      }
+        res.status(422).send({message: "film doesn't exist"});
+        throw "invalid film id";
+      };
       //get the film data
-      let filmObject = film.dataValues
-      return filmObject
-
+      let filmObject = film.dataValues;
+      return filmObject;
     })
     .then((filmObject) => {
       //select other films in the same genre released
@@ -103,11 +112,11 @@ function getFilmRecommendations(req, res) {
             $between: [minRange, maxRange]
           }
         }
-      })
+      });
     })
     .then((relatedFilms) => {
       let filmIds = [];
-      matchingFilms = relatedFilms.map(function(i){
+      matchingFilms = relatedFilms.map(function(i) {
         return i.dataValues;
       })
       relatedFilms.forEach((film) => {
@@ -127,46 +136,46 @@ function getFilmRecommendations(req, res) {
               //start calculating avg rating by summing the review ratings
               avgRating += review.rating;
 
-              if(i === movie.reviews.length -1){
+              if(i === movie.reviews.length -1) {
                 //once we've added all the ratings, average them out to two decimals!
                 avgRating = Number(Math.round((avgRating/movie.reviews.length)+'e2')+'e-2');
                 if(avgRating >= 4.0){
                   //if the avg rating for a film is equal to or greater than 4,
                   // add the # of reviews and avg rating values to the correct matching film data
                   matchingFilms.find((film, i) => {
-                    if(film.id === movie.film_id){
+                    if(film.id === movie.film_id) {
                         //add the rating, # of reviews, and update genre field on this movie
                         matchingFilms[i].averageRating = avgRating;
                         matchingFilms[i].reviews = movie.reviews.length;
                         matchingFilms[i].genre = matchingFilms[i].genre.name;
                         //add the fully updated film to our recommendations array
                         filmResponse.recommendations.push(matchingFilms[i]);
-                        return true
-                    }
-                  })
-                  console.log('average is at least 4!')
-                  
-                } else {
-                  console.log('average is not good enough')
-                }
-              }
-            })
-          }
+                        return true;
+                    };
+                  });
+                };
+              };
+            });
+          };
         }) //END OF allMovieReviews.forEach
         //ready to send back the best recommendations!
-        sendRecommendations()
-      })
-    }) //END OF request to get 3rd party reviews
+        handleOffsetAndLimit()
+    });
+  }).catch((err) => { console.log(err)})
+  //END OF request to get 3rd party reviews
 
-  // send successful response
+  // handle offset and limit
+  let handleOffsetAndLimit = () => {
+    if (filmResponse.meta.offset > 0) {
+      filmResponse.recommendations.splice(0, filmResponse.meta.offset);
+    };
+    if(filmResponse.recommendations.length > filmResponse.meta.limit) {
+      filmResponse.recommendations.splice(filmResponse.meta.limit, filmResponse.recommendations.length - filmResponse.meta.limit)
+    };
+    // send successful response
+    sendRecommendations();
+  };
   let sendRecommendations = () => {res.status(200).json(filmResponse)};
 }
-// TODO: DONE db call#1: get the film that matches the id from the api request (e.g. Harry potter, genre: horror, releasedate: 2000)
-// TODO: DONE db call#2: from db grab genres and release dates that match the request (e.g. grab horror films released 15 years before and after 2000)
-// TODO: DONE find films within this array with min 5 reviews and min 4 stars using 3rd party api on each
-// TODO: DONE return filtered recommendations
-// TODO: DONE work on passing the tests and error handling
-  // TODO: enable limit and offset
-// TODO: DONE need to add genre name to response.
 
 module.exports = app;
